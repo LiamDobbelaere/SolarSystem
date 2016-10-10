@@ -4,6 +4,8 @@ import javafx.event.EventHandler;
 import javafx.geometry.Point3D;
 import javafx.scene.*;
 import javafx.scene.image.Image;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
@@ -13,6 +15,7 @@ import javafx.stage.Stage;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Created by Digaly on 9/10/2016.
@@ -21,10 +24,16 @@ public class Solarsystem extends Application
 {
     private static double zTrans = -3500;
     private static double frames;
-    private static List<Planet> planets;
+    private static PlanetManager planets;
+    private static List<Trail3D> trails;
+    private static double timeScale;
+    private static int camSpeed;
 
     public static void main(String[] args) {
-        planets = new ArrayList<>();
+        planets = new PlanetManager();
+        trails = new CopyOnWriteArrayList<>();
+        timeScale = 1;
+        camSpeed = 100000;
         launch(args);
     }
 
@@ -45,15 +54,21 @@ public class Solarsystem extends Application
         scene.setFill(Color.BLACK);
 
         final PhongMaterial whiteMaterial = new PhongMaterial();
-        whiteMaterial.setDiffuseColor(Color.WHITE);
+        whiteMaterial.setDiffuseColor(Color.RED);
         //whiteMaterial.setDiffuseMap(new Image("sun.gif"));
 
-        Sphere sphere = new Sphere(695.700);
-        sphere.setMaterial(whiteMaterial);
-        root.getChildren().add(sphere);
+        for (Planet3D planet : planets) {
+            root.getChildren().add(planet.getSphere());
+        }
+
+        Sphere sun = new Sphere(695700 / 2);
+        root.getChildren().add(sun);
+        //Sphere sphere = new Sphere(695.700);
+        //sphere.setMaterial(whiteMaterial);
+        //root.getChildren().add(sphere);
 
         Camera camera = new PerspectiveCamera(true);
-        camera.setFarClip(10000);
+        camera.setFarClip(Integer.MAX_VALUE);
         camera.setNearClip(0.1);
         scene.setCamera(camera);
 
@@ -62,7 +77,38 @@ public class Solarsystem extends Application
             @Override
             public void handle(ScrollEvent event)
             {
-                zTrans += event.getDeltaY();
+                zTrans += event.getDeltaY() * (zTrans / -50);
+            }
+        });
+
+        scene.setOnKeyPressed(new EventHandler<KeyEvent>()
+        {
+            @Override
+            public void handle(KeyEvent event)
+            {
+                switch (event.getCode()) {
+                    case RIGHT:
+                        scene.getCamera().setTranslateX(camera.getTranslateX() + camSpeed);
+                        break;
+                    case LEFT:
+                        scene.getCamera().setTranslateX(camera.getTranslateX() - camSpeed);
+                        break;
+                    case UP:
+                        scene.getCamera().setTranslateY(camera.getTranslateY() - camSpeed);
+                        break;
+                    case DOWN:
+                        scene.getCamera().setTranslateY(camera.getTranslateY() + camSpeed);
+                        break;
+                    case NUMPAD8:
+                        scene.getCamera().setRotationAxis(new Point3D(1, 0, 0));
+                        scene.getCamera().setRotate(scene.getCamera().getRotate() + 5);
+                        break;
+                    case NUMPAD2:
+                        scene.getCamera().setRotationAxis(new Point3D(1, 0, 0));
+                        scene.getCamera().setRotate(scene.getCamera().getRotate() - 5);
+                        break;
+
+                }
             }
         });
 
@@ -72,12 +118,41 @@ public class Solarsystem extends Application
             public void handle(long now)
             {
                 //sphere.setTranslateX(sphere.getTranslateX() + 1);
-                sphere.setTranslateX(Math.cos(frames / 10) * 800);
+                /*sphere.setTranslateX(Math.cos(frames / 10) * 800);
                 sphere.setTranslateY(Math.sin(frames / 10) * 800);
 
                 sphere.setRotationAxis(new Point3D(0, 1, 0));
-                sphere.setRotate(sphere.getRotate() + 1);
+                sphere.setRotate(sphere.getRotate() + 1);*/
                 //zTrans-=5;
+
+                for (Planet3D planet : planets) {
+                    planet.getSphere().setTranslateX(Math.cos(frames / planet.getPlanet().getSunOrbitTime() * timeScale) * planet.getPlanet().getDistanceToSun() / 100);
+                    planet.getSphere().setTranslateY(Math.sin(frames / planet.getPlanet().getSunOrbitTime() * timeScale) * planet.getPlanet().getDistanceToSun() / 100);
+                    Sphere trail = new Sphere(planet.getSphere().getRadius());
+
+                    /*if (planet.getPlanet().getName().equals("Earth")) {
+                        scene.getCamera().setTranslateX(planet.getSphere().getTranslateX());
+                        scene.getCamera().setTranslateY(planet.getSphere().getTranslateY());
+                    }*/
+
+                    if (frames % 5 == 0) {
+                        trail.setTranslateX(planet.getSphere().getTranslateX());
+                        trail.setTranslateY(planet.getSphere().getTranslateY());
+                        trail.setMaterial(new PhongMaterial(Color.GREEN));
+                        trails.add(new Trail3D(trail, 10000));
+                        root.getChildren().add(trail);
+                    }
+
+                    for (Trail3D trailInList : trails) {
+                        trailInList.drainLife();
+
+                        if (trailInList.getLife() <= 0) {
+                            root.getChildren().remove(trailInList.getSphere());
+                            trails.remove(trailInList);
+                        }
+                    }
+                }
+
                 scene.getCamera().setTranslateZ(zTrans);
 
                 frames++;
